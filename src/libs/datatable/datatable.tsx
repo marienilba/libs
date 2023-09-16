@@ -5,9 +5,12 @@ import {
   ComponentProps,
   Fragment,
   ReactNode,
+  Ref,
   createContext,
+  forwardRef,
   useContext,
   useEffect,
+  useImperativeHandle,
   useState,
 } from "react";
 import { z } from "zod";
@@ -28,12 +31,30 @@ type LoaderParams = {
   order: Order;
 };
 
-export type Loader = (params: LoaderParams) => Promise<LoaderData>;
+export type Loader = (
+  params: LoaderParams,
+  states: Immutable[]
+) => Promise<LoaderData>;
 
-type RootProps<TLoader extends Loader> = {
-  children: ReactNode;
-  loader: TLoader;
+type BuildLoader = (params: LoaderParams, states: unknown[]) => unknown;
+
+DataTable.buildLoader = function <TLoader extends BuildLoader>(
+  loader: TLoader
+) {
+  return loader;
 };
+
+type FetchState = {
+  loading: boolean;
+  error: boolean;
+  success: boolean;
+};
+
+const ContextFetch = createContext<FetchState>({
+  loading: true,
+  error: false,
+  success: false,
+});
 
 const ContextLoader = createContext<LoaderData>({
   data: [],
@@ -46,20 +67,57 @@ const ContextParams = createContext<LoaderParams>({
   order: new Map(),
 });
 
-const ContextSetter = createContext<{
+type ContextSetter = {
   changeOrder: (order: OrderItem) => void;
   changeSize: (size: number) => void;
   changePage: (page: number) => void;
-}>({
+};
+
+const ContextSetter = createContext<ContextSetter>({
   changeOrder: (order) => {},
   changeSize: (size) => {},
   changePage: (page) => {},
 });
 
-DataTable.Root = function <TLoader extends Loader>({
-  children,
-  loader,
-}: RootProps<TLoader>) {
+type Immutable =
+  | string
+  | number
+  | boolean
+  | symbol
+  | null
+  | undefined
+  | ReadonlyArray<any>
+  | readonly [any, ...any[]]
+  | { readonly [key: string]: any };
+
+type RootProps<TLoader extends Loader> = {
+  children: ReactNode;
+  loader: TLoader;
+  states?: Immutable[];
+};
+
+type RootRef<TLoader extends Loader> = {
+  refetch: (states?: Immutable[]) => ReturnType<TLoader>;
+  getPage: () => number;
+  getSize: () => number;
+  getOrder: () => Order;
+  getData: () => GetLoaderData<TLoader>;
+  getTotal: () => number;
+  getStates: () => Immutable[];
+} & ContextSetter;
+
+export type DataTableRef<TLoader extends Loader> = RootRef<TLoader>;
+
+function fowardedRoot<TLoader extends Loader>(
+  { children, loader, states = [] }: RootProps<TLoader>,
+  forwardRef: Ref<RootRef<TLoader>>
+) {
+  const [state, setState] = useState<FetchState>({
+    loading: true,
+    error: false,
+    success: false,
+  });
+
   const [params, setParams] = useState<LoaderParams>({
     page: 0,
     size: 10,
@@ -71,6 +129,18 @@ DataTable.Root = function <TLoader extends Loader>({
     total: 0,
   });
 
+  const load = async () => {
+    setState((s) => ({
+      ...s,
+      loading: true,
+    }));
+
+    return loader(params, states)
+      .then(setRes)
+      .then(() => setState({ loading: false, success: true, error: false }))
+      .catch(() => setState({ loading: false, success: false, error: true }));
+  };
+
   const changeOrder = ([name, direction]: OrderItem) => {
     params.order.set(
       name,
@@ -80,46 +150,104 @@ DataTable.Root = function <TLoader extends Loader>({
         ? "descending"
         : "ascending"
     );
+    params.page = 0;
     setParams({ ...params });
-    loader(params).then(setRes);
+    load();
   };
 
   const changeSize = (size: number) => {
+    params.page = Math.max(
+      Math.min(
+        params.size < size
+          ? Math.ceil(((params.page + 1) * params.size) / size) - 1
+          : Math.ceil(
+              ((params.page + 1) * params.size) / size -
+                Math.floor(params.size / size)
+            ),
+        res.total - 1
+      ),
+      0
+    );
     params.size = size;
     setParams((params) => ({ ...params }));
-    loader(params).then(setRes);
+    load();
   };
 
   const changePage = (page: number) => {
     params.page = page;
     setParams((params) => ({ ...params }));
-    loader(params).then(setRes);
+    load();
   };
 
+  useImperativeHandle(forwardRef, () => ({
+    getData: () => res.data,
+    getTotal: () => res.total,
+    getOrder: () => params.order,
+    getPage: () => params.page,
+    getSize: () => params.size,
+    // @ts-ignore
+    refetch: async (sts) => {
+      setState((s) => ({ ...s, loading: true }));
+      return loader(params, sts || states)
+        .then((result) => {
+          setRes(result);
+          setState({ loading: false, success: true, error: false });
+          return result;
+        })
+        .catch(() => setState({ loading: false, success: false, error: true }));
+    },
+    getStates: () => states,
+    changeOrder,
+    changePage,
+    changeSize,
+  }));
+
   useEffect(() => {
-    loader(params).then(setRes);
-  }, []);
+    setParams((p) => ({ ...p, page: 0 }));
+    load();
+  }, [...states]);
 
   return (
-    <ContextLoader.Provider value={{ data: res.data, total: res.total }}>
-      <ContextParams.Provider value={params}>
-        <ContextSetter.Provider
-          value={{
-            changeOrder,
-            changeSize,
-            changePage,
-          }}
-        >
-          {children}
-        </ContextSetter.Provider>
-      </ContextParams.Provider>
+    <ContextLoader.Provider value={res}>
+      <ContextFetch.Provider value={state}>
+        <ContextParams.Provider value={params}>
+          <ContextSetter.Provider
+            value={{
+              changeOrder,
+              changeSize,
+              changePage,
+            }}
+          >
+            {children}
+          </ContextSetter.Provider>
+        </ContextParams.Provider>
+      </ContextFetch.Provider>
     </ContextLoader.Provider>
   );
-};
+}
 
-DataTable.Table = ({ children, ...props }: ComponentProps<"table">) => (
-  <table {...props}>{children}</table>
-);
+DataTable.Root = forwardRef(fowardedRoot);
+
+type TableProps = {
+  fallback?: () => JSX.Element;
+} & ComponentProps<"table">;
+
+DataTable.Table = ({ children, fallback, ...props }: TableProps) => {
+  const { success, error, loading } = useContext(ContextFetch);
+  const { data: datas, total } = useContext(ContextLoader);
+
+  if (fallback)
+    if (!(loading && !success && !error))
+      if (error || (datas.length < 1 && total < 1 && success))
+        return (
+          <>
+            <table {...props}>{children}</table>
+            {fallback()}
+          </>
+        );
+
+  return <table {...props}>{children}</table>;
+};
 
 DataTable.Header = ({ children, ...props }: ComponentProps<"thead">) => (
   <thead {...props}>
@@ -174,12 +302,12 @@ DataTable.Body = function <TLoader extends Loader>({
   ...props
 }: BodyProps<TLoader>) {
   const { data: datas } = useContext(ContextLoader);
+
   return (
     <tbody {...props}>
-      {Boolean(datas) &&
-        datas.map((data, index) => (
-          <Fragment key={index}>{children(data)}</Fragment>
-        ))}
+      {datas.map((data, index) => (
+        <Fragment key={index}>{children(data)}</Fragment>
+      ))}
     </tbody>
   );
 };
@@ -272,17 +400,28 @@ type ArrowProps = (
   | {
       previous: true;
       next?: never;
+      start?: never;
+      end?: never;
     }
-  | { next: true; previous?: never }
+  | { next: true; previous?: never; start?: never; end?: never }
+  | { next?: never; previous?: never; start: true; end?: never }
+  | { next?: never; previous?: never; start?: never; end: true }
 ) & {} & ComponentProps<"button">;
 
-DataTable.Arrow = ({ children, previous, next, ...props }: ArrowProps) => {
+DataTable.Arrow = ({
+  children,
+  previous,
+  next,
+  start,
+  end,
+  ...props
+}: ArrowProps) => {
   const { changePage } = useContext(ContextSetter);
-  const { hasNext, hasPrev, current } = useContext(ContextPagination);
+  const { hasNext, hasPrev, current, pages } = useContext(ContextPagination);
   const disable =
-    Boolean(previous) && hasPrev
+    Boolean(previous || start) && hasPrev
       ? false
-      : Boolean(next) && hasNext
+      : Boolean(next || end) && hasNext
       ? false
       : true;
 
@@ -292,7 +431,14 @@ DataTable.Arrow = ({ children, previous, next, ...props }: ArrowProps) => {
       aria-disabled={disable}
       data-action={previous ? "previous" : "next"}
       onClick={(e) => {
-        const newPage = previous ? current - 1 : current + 1;
+        const newPage = start
+          ? 0
+          : end
+          ? pages - 1
+          : previous
+          ? current - 1
+          : current + 1;
+
         changePage(newPage);
         props.onChange && props.onChange(e);
       }}
@@ -313,7 +459,9 @@ DataTable.Pages = ({
       {Array(pages < length ? pages : length)
         .fill(null)
         .map((_, i) =>
-          current + 1 > pages - Math.floor(length / 2)
+          pages < length
+            ? i
+            : current + 1 > pages - Math.floor(length / 2)
             ? pages - length + i
             : current + 1 > Math.ceil(length / 2)
             ? i + (current - 2)
@@ -341,6 +489,11 @@ DataTable.Pages = ({
   );
 };
 
+DataTable.Total = ({ ...props }: Omit<ComponentProps<"span">, "children">) => {
+  const { total } = useContext(ContextLoader);
+  return <span {...props}>{total}</span>;
+};
+
 export const {
   Root,
   Table,
@@ -354,4 +507,6 @@ export const {
   Pagination,
   Arrow,
   Pages,
+  Total,
+  buildLoader,
 } = DataTable;
