@@ -4,26 +4,23 @@ import { useZorm } from "@/libs/services/zorm";
 import { useRef } from "react";
 import { z } from "zod";
 
-const datePeriod = z
-  .object({
-    begin: z.coerce.date(),
-    end: z.coerce.date(),
-  })
-  .refine((data) => data.begin.getTime() !== data.end.getTime(), {
-    message: "Date can't be same",
-  })
-  .refine((data) => data.begin <= data.end, {
-    message: "Begin can't be after end",
-  });
+const checkUsernameAlreadyExists = async (username: string) => {
+  await new Promise((resolve) => setTimeout(resolve, 1000));
+  return username !== "marie";
+};
 
 const schema = z.object({
-  date: datePeriod,
+  username: z.coerce
+    .string()
+    .refine(async (data) => await checkUsernameAlreadyExists(data), {
+      message: "Username already exists",
+    }),
 });
 
 export default function Home() {
   const form = useRef<HTMLFormElement>(null);
 
-  const zorm = useZorm(schema, (event) => {
+  const zorm = useZorm(schema, async (event) => {
     event.preventDefault();
     if (event.success) event.data; // OK
   });
@@ -33,19 +30,14 @@ export default function Home() {
       <form ref={form} onSubmit={zorm.form.submit}>
         <fieldset className="flex gap-2 p-4">
           <input
-            type="date"
-            name={zorm.fields.date().begin().name()}
-            className="p-2 bg-slate-600 text-white border border-slate-400"
-          />
-          <input
-            type="date"
-            name={zorm.fields.date().end().name()}
+            type="text"
+            name={zorm.fields.username().name()}
             className="p-2 bg-slate-600 text-white border border-slate-400"
           />
         </fieldset>
         <div className="m-4">
           {zorm.errors
-            .date()
+            .username()
             .errors()
             ?.map((error) => (
               <p key={error.code}>{error.message}</p>

@@ -44,8 +44,9 @@ export function useZorm<TSchema extends ZodSchema>(
 
   return {
     form: {
-      submit: (event: React.FormEvent<HTMLFormElement>) => {
-        const result = ZormUtil.process(schema, event);
+      submit: async (event: React.FormEvent<HTMLFormElement>) => {
+        if (ZormUtil.promises(schema)) event.preventDefault();
+        const result = await ZormUtil.process(schema, event);
         setErrors(result.success ? new ZodError([]) : result.error);
         submit(Object.assign(event, result));
       },
@@ -75,7 +76,7 @@ class ZormUtil {
       );
 
       useEffect(() => {
-        const listener = (event: Event) => {
+        const listener = async (event: Event) => {
           if (!ref.current || !validation.current) return;
           const target = event.target as HTMLInputElement;
 
@@ -89,7 +90,7 @@ class ZormUtil {
             const mapped = this.mapObject(raw);
 
             const nestOut = ZormUtil.nestOut(ZormUtil.path(path), mapped);
-            const validate = validation.current.safeParse(nestOut);
+            const validate = await validation.current.safeParseAsync(nestOut);
             if (validate.success) {
               setState(validate.data);
               setError(
@@ -192,13 +193,13 @@ class ZormUtil {
    * @param event
    * @returns ZodSafeParse
    */
-  static process<TSchema extends ZodSchema>(
+  static async process<TSchema extends ZodSchema>(
     schema: TSchema,
     event: React.FormEvent<HTMLFormElement>
   ) {
     const raw = Object.fromEntries(new FormData(event.currentTarget));
     const mapped = this.mapObject(raw);
-    return schema.safeParse(mapped);
+    return await schema.safeParseAsync(mapped);
   }
 
   /**
@@ -466,13 +467,29 @@ class ZormUtil {
   }
 
   /**
+   * Assert schema has a promise function
+   * @param schema
+   */
+  static promises<TSchema extends ZodSchema>(schema: TSchema): boolean {
+    try {
+      schema.parse(z.NEVER, { async: true });
+    } catch (error) {
+      return (
+        error instanceof Error &&
+        error.message === "Synchronous parse encountered promise."
+      );
+    }
+    return false;
+  }
+
+  /**
    * Remove all effects, optionals etc
    */
-  static through<TSchema extends ZodSchema>(schema: TSchema) {
+  static through<TSchema extends ZodSchema>(schema: TSchema, promise = true) {
     let out = schema;
-    while (ZormUtil.outable(out))
+    while (ZormUtil.outable(out, promise))
       try {
-        out = ZormUtil.out(out);
+        out = ZormUtil.out(out, promise);
       } catch (error) {
         break;
       }
@@ -499,7 +516,7 @@ class ZormUtil {
    * @param schema
    * @returns
    */
-  static out<TSchema extends ZodSchema>(schema: TSchema) {
+  static out<TSchema extends ZodSchema>(schema: TSchema, effect = true) {
     if (
       schema instanceof ZodOptional ||
       schema instanceof ZodNullable ||
@@ -509,7 +526,7 @@ class ZormUtil {
     )
       return schema.unwrap();
 
-    if (schema instanceof ZodEffects) return schema.innerType();
+    if (effect && schema instanceof ZodEffects) return schema.innerType();
 
     throw new Error(`schema ${schema.description} can't be outed`);
   }
@@ -519,9 +536,9 @@ class ZormUtil {
    * @param schema
    * @returns boolean
    */
-  static outable<TSchema extends ZodSchema>(schema: TSchema) {
+  static outable<TSchema extends ZodSchema>(schema: TSchema, effect = true) {
     return (
-      schema instanceof ZodEffects ||
+      (effect && schema instanceof ZodEffects) ||
       schema instanceof ZodOptional ||
       schema instanceof ZodBranded ||
       schema instanceof ZodNullable ||
