@@ -52,7 +52,9 @@ export function useZorm<TSchema extends ZodSchema>(
       },
     },
     fields: ZormUtil.generateFields(mock),
-    errors: ZormUtil.generateErrors(mock, errors),
+    errors: Object.assign(ZormUtil.generateErrors(mock, errors), {
+      errors: () => errors.errors,
+    }),
     watch: ZormUtil.generateWatch(schema, setErrors),
   };
 }
