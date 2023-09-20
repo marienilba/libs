@@ -92,7 +92,9 @@ class ZormUtil {
             const mapped = this.mapObject(raw);
 
             const nestOut = ZormUtil.nestOut(ZormUtil.path(path), mapped);
+
             const validate = await validation.current.safeParseAsync(nestOut);
+
             if (validate.success) {
               setState(validate.data);
               setError(

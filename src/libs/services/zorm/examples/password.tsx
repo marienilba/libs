@@ -21,6 +21,7 @@ const schema = z.object({
     })
     .refine((data) => data.password === data.confirm, {
       message: "Passwords don't match",
+      path: ["confirm"],
     }),
 });
 
