@@ -46,7 +46,7 @@ export function useZorm<TSchema extends ZodSchema>(
     form: {
       submit: (event: React.FormEvent<HTMLFormElement>) => {
         const result = ZormUtil.process(schema, event);
-        if (!result.success) setErrors(result.error);
+        setErrors(result.success ? new ZodError([]) : result.error);
         submit(Object.assign(event, result));
       },
     },
@@ -92,13 +92,28 @@ class ZormUtil {
             const validate = validation.current.safeParse(nestOut);
             if (validate.success) {
               setState(validate.data);
-              setError(new ZodError([]));
+              setError(
+                (errors) =>
+                  new ZodError(
+                    errors.errors.filter(
+                      (error) =>
+                        !ZormUtil.implied(error.path, ZormUtil.path(path))
+                    )
+                  )
+              );
             } else {
-              const ep = ZormUtil.path(path);
-              validate.error.errors.forEach((error) => {
-                error.path = ep;
+              setError((error) => {
+                const ep = ZormUtil.path(path);
+                validate.error.errors.forEach((error) => {
+                  error.path = ep;
+                });
+                return new ZodError([
+                  ...error.errors.filter(
+                    (error) => !ZormUtil.implied(error.path, ep)
+                  ),
+                  ...validate.error.errors,
+                ]);
               });
-              setError(validate.error);
             }
           }
         };
@@ -126,13 +141,25 @@ class ZormUtil {
       .map((match) => match.slice(1, -1));
   }
 
-  static implied(target: string[], path: string[]) {
+  /**
+   * Compare if target is implied in path
+   * @param target
+   * @param path
+   * @returns
+   */
+  static implied(target: PropertyKey[], path: PropertyKey[]) {
     if (target.length < path.length) return false;
     const trimmed = target.slice(0, path.length);
 
     return trimmed.every((value, index) => value === path[index]);
   }
 
+  static arrayEquals(array1: PropertyKey[], array2: PropertyKey[]) {
+    return (
+      array1.length === array2.length &&
+      array1.every((value, index) => value === array2[index])
+    );
+  }
   /**
    * Get schema based from path
    * @param schema
@@ -370,11 +397,7 @@ class ZormUtil {
   }
 
   static findError(errors: ZodError, path: PropertyKey[]) {
-    return errors.errors.filter(
-      (error) =>
-        error.path.length === path.length &&
-        error.path.every((value, index) => value === path[index])
-    );
+    return errors.errors.filter((error) => ZormUtil.implied(error.path, path));
   }
 
   /**
@@ -385,7 +408,8 @@ class ZormUtil {
   static mock<TSchema extends ZodSchema>(schema: TSchema): TSchema["_type"] {
     const shape = ZormUtil.object(schema);
     const mock = ZormUtil.shapeOut(shape);
-    return mock;
+
+    return mock ?? {};
   }
 
   /**
@@ -536,7 +560,9 @@ type DeepWrapError<T> = {
           }
         : { errors: () => ZodError<T[K]>["errors"] | undefined }
     : T[K] extends { [x: string]: any }
-    ? () => DeepWrapError<T[K]>
+    ? () => DeepWrapError<T[K]> & {
+        errors: () => ZodError<T[K]>["errors"] | undefined;
+      }
     : () => { errors: () => ZodError<T[K]>["errors"] | undefined };
 } & {};
 
