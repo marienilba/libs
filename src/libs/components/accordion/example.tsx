@@ -1,4 +1,4 @@
-import { Accordion } from "@/libs/accordion";
+import { Accordion } from "@/libs/components/accordion";
 
 export default function Home() {
   return (

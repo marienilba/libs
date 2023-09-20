@@ -1,4 +1,4 @@
-import { Combobox } from "@/libs/combobox";
+import { Combobox } from "@/libs/components/combobox";
 
 export default function Home() {
   return (

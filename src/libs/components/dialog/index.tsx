@@ -1,16 +1,16 @@
 import React, { ComponentProps } from "react";
 
-const MODAL_ZINDEX = 99;
+const DIALOG_ZINDEX = 99;
 
-export const Modal = () => <></>;
+export const Dialog = () => <></>;
 
-let modalId = 0;
-const getId = () => modalId;
-const genId = () => modalId++;
+let DialogId = 0;
+const getId = () => DialogId;
+const genId = () => DialogId++;
 
-Modal.Root = ({ children, ...props }: ComponentProps<"dialog">) => {
+Dialog.Root = ({ children, ...props }: ComponentProps<"dialog">) => {
   const overlay = React.Children.map(children, (child) => {
-    if (React.isValidElement(child) && child.type === Modal.Overlay)
+    if (React.isValidElement(child) && child.type === Dialog.Overlay)
       return child;
   });
 
@@ -21,13 +21,13 @@ Modal.Root = ({ children, ...props }: ComponentProps<"dialog">) => {
       <dialog
         {...props}
         style={{
-          zIndex: MODAL_ZINDEX,
+          zIndex: DIALOG_ZINDEX,
           top: "50%",
           transform: "translateY(-50%)",
         }}
         className="peer/dialog"
       >
-        <form id={`modal:${getId()}`} method="dialog"></form>
+        <form id={`dialog:${getId()}`} method="dialog"></form>
         {children}
       </dialog>
       {overlay}
@@ -35,16 +35,16 @@ Modal.Root = ({ children, ...props }: ComponentProps<"dialog">) => {
   );
 };
 
-Modal.Close = ({
+Dialog.Close = ({
   children,
   ...props
 }: Omit<ComponentProps<"button">, "form" | "value">) => (
-  <button {...props} form={`modal:${getId()}`} value="cancel">
+  <button {...props} form={`dialog:${getId()}`} value="cancel">
     {children}
   </button>
 );
 
-Modal.Overlay = ({ className }: { className: string }) => (
+Dialog.Overlay = ({ className }: { className: string }) => (
   <div
     style={{
       position: "fixed",

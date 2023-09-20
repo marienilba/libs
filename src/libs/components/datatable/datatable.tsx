@@ -104,6 +104,7 @@ type RootRef<TLoader extends Loader> = {
   getData: () => GetLoaderData<TLoader>;
   getTotal: () => number;
   getStates: () => Immutable[];
+  getState: () => FetchState;
 } & ContextSetter;
 
 export type DataTableRef<TLoader extends Loader> = RootRef<TLoader>;
@@ -200,6 +201,7 @@ function fowardedRoot<TLoader extends Loader>(
     changeOrder,
     changePage,
     changeSize,
+    getState: () => state,
   }));
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { Popover } from "@/libs/popover";
+import { Popover } from "@/libs/components/popover";
 
 export default function Home() {
   return (
