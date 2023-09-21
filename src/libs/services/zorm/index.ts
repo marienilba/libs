@@ -19,7 +19,6 @@ import {
   ZodBranded,
   ZodEffects,
   ZodError,
-  ZodIssue,
   ZodNullable,
   ZodObject,
   ZodOptional,
@@ -29,6 +28,16 @@ import {
   ZodSchema,
   z,
 } from "zod";
+import { implied, isNumericKeys, outObject, pathArray } from "./utils";
+import { mapObject } from "./form-utils";
+import {
+  array,
+  findError,
+  object,
+  promises,
+  shapeOut,
+  through,
+} from "./zod-utils";
 
 export function useZorm<TSchema extends ZodSchema>(
   schema: TSchema,
@@ -46,7 +55,7 @@ export function useZorm<TSchema extends ZodSchema>(
   return {
     form: {
       submit: async (event: React.FormEvent<HTMLFormElement>) => {
-        if (ZormUtil.promises(schema)) event.preventDefault();
+        if (promises(schema)) event.preventDefault();
         const result = await ZormUtil.process(schema, event);
         setErrors(result.success ? new ZodError([]) : result.error);
         const ctx = await submit(Object.assign(event, result));
@@ -75,25 +84,20 @@ class ZormUtil {
         DeepRemoveOptionals<TSchema["_type"]>
       > | null>(null);
 
-      const validation = useRef(
-        ZormUtil.extraction(schema, ZormUtil.path(path))
-      );
+      const validation = useRef(ZormUtil.extraction(schema, pathArray(path)));
 
       useEffect(() => {
         const listener = async (event: Event) => {
           if (!ref.current || !validation.current) return;
           const target = event.target as HTMLInputElement;
 
-          const implied = ZormUtil.implied(
-            ZormUtil.path(target.name),
-            ZormUtil.path(path)
-          );
+          const impl = implied(pathArray(target.name), pathArray(path));
 
-          if (implied) {
+          if (impl) {
             const raw = Object.fromEntries(new FormData(ref.current));
-            const mapped = this.mapObject(raw);
+            const mapped = mapObject(raw);
 
-            const nestOut = ZormUtil.nestOut(ZormUtil.path(path), mapped);
+            const nestOut = outObject(pathArray(path), mapped);
 
             const validate = await validation.current.safeParseAsync(nestOut);
 
@@ -103,21 +107,18 @@ class ZormUtil {
                 (errors) =>
                   new ZodError(
                     errors.errors.filter(
-                      (error) =>
-                        !ZormUtil.implied(error.path, ZormUtil.path(path))
+                      (error) => !implied(error.path, pathArray(path))
                     )
                   )
               );
             } else {
               setError((error) => {
-                const ep = ZormUtil.path(path);
+                const ep = pathArray(path);
                 validate.error.errors.forEach((error) => {
                   error.path = ep;
                 });
                 return new ZodError([
-                  ...error.errors.filter(
-                    (error) => !ZormUtil.implied(error.path, ep)
-                  ),
+                  ...error.errors.filter((error) => !implied(error.path, ep)),
                   ...validate.error.errors,
                 ]);
               });
@@ -133,40 +134,6 @@ class ZormUtil {
     };
   }
 
-  static nestOut(path: string[], object: Record<PropertyKey, any>) {
-    return path.reduce((result, key) => result?.[key], object);
-  }
-  /**
-   * Return path [] format to array format
-   * @param path
-   * @returns path[]
-   */
-  static path(path: string): string[] {
-    return path
-      .match(/\[(.*?)\]/g)!
-      .filter((match) => !/\d+/.test(match))
-      .map((match) => match.slice(1, -1));
-  }
-
-  /**
-   * Compare if target is implied in path
-   * @param target
-   * @param path
-   * @returns
-   */
-  static implied(target: PropertyKey[], path: PropertyKey[]) {
-    if (target.length < path.length) return false;
-    const trimmed = target.slice(0, path.length);
-
-    return trimmed.every((value, index) => value === path[index]);
-  }
-
-  static arrayEquals(array1: PropertyKey[], array2: PropertyKey[]) {
-    return (
-      array1.length === array2.length &&
-      array1.every((value, index) => value === array2[index])
-    );
-  }
   /**
    * Get schema based from path
    * @param schema
@@ -179,14 +146,14 @@ class ZormUtil {
     const tar = path.shift();
     if (tar === undefined) return schema;
 
-    const through = ZormUtil.through(schema);
-    const obj = ZormUtil.object(through);
+    const throughed = through(schema);
+    const obj = object(throughed);
 
     const shape = obj[tar];
-    if (ZormUtil.through(shape) instanceof ZodObject) {
+    if (through(shape) instanceof ZodObject) {
       return ZormUtil.extraction(shape, path);
-    } else if (ZormUtil.through(shape) instanceof ZodArray) {
-      if (path.length) return ZormUtil.extraction(ZormUtil.array(shape), path);
+    } else if (through(shape) instanceof ZodArray) {
+      if (path.length) return ZormUtil.extraction(array(shape), path);
       else return shape;
     }
 
@@ -204,66 +171,8 @@ class ZormUtil {
     event: React.FormEvent<HTMLFormElement>
   ) {
     const raw = Object.fromEntries(new FormData(event.currentTarget));
-    const mapped = this.mapObject(raw);
+    const mapped = mapObject(raw);
     return await schema.safeParseAsync(mapped);
-  }
-
-  /**
-   * Map the data from form to object
-   * @param raw
-   * @returns object
-   */
-  private static mapObject(raw: Record<string, any>) {
-    const result: Record<PropertyKey, any> = {};
-
-    for (const key in raw) {
-      const value = raw[key];
-      const keys = key.split(/\]\[|\[|\]/).filter((k) => k !== "");
-
-      let obj = result;
-      keys.forEach((k, index) => {
-        if (!obj[k]) {
-          obj[k] = {};
-        }
-        if (index === keys.length - 1) {
-          obj[k] = value;
-        }
-        obj = obj[k];
-      });
-    }
-
-    return ZormUtil.mapArray(result);
-  }
-
-  /**
-   * Map mapObject object-arrays to arrays
-   * @param obj
-   * @returns object
-   */
-  private static mapArray(obj: any): Record<PropertyKey, any> {
-    if (typeof obj !== "object" || obj === null) {
-      return obj;
-    }
-
-    if (Array.isArray(obj) || ZormUtil.isNumericKeys(obj)) {
-      return Object.values(obj).map(ZormUtil.mapArray);
-    }
-
-    const result: Record<PropertyKey, any> = {};
-    for (const key in obj) {
-      result[key] = ZormUtil.mapArray(obj[key]);
-    }
-
-    return result;
-  }
-
-  /**
-   * Return if a object have only numeric keys
-   * @param obj
-   * @returns boolean
-   */
-  private static isNumericKeys(obj: Record<string, any>) {
-    return Object.keys(obj).every((key) => !isNaN(parseInt(key)));
   }
 
   /**
@@ -350,7 +259,7 @@ class ZormUtil {
             Object.assign(
               {},
               ZormUtil.generateErrors(value, errors, [...path, key]),
-              { errors: () => this.findError(errors, [...path, key]) }
+              { errors: () => findError(errors, [...path, key]) }
             ),
         };
       }
@@ -372,18 +281,17 @@ class ZormUtil {
                       index,
                     ]),
                     {
-                      errors: () =>
-                        this.findError(errors, [...path, key, index]),
+                      errors: () => findError(errors, [...path, key, index]),
                     }
                   )
-                : { errors: () => this.findError(errors, [...path, key]) },
+                : { errors: () => findError(errors, [...path, key]) },
           };
         } else {
           return {
             ...prev,
             [key]: (index?: number) => ({
               errors: () =>
-                ZormUtil.findError(
+                findError(
                   errors,
                   typeof index === "number"
                     ? [...path, key, index]
@@ -397,14 +305,10 @@ class ZormUtil {
       return {
         ...prev,
         [key]: () => ({
-          errors: () => ZormUtil.findError(errors, [...path, key]),
+          errors: () => findError(errors, [...path, key]),
         }),
       };
     }, {} as any);
-  }
-
-  static findError(errors: ZodError, path: PropertyKey[]) {
-    return errors.errors.filter((error) => ZormUtil.implied(error.path, path));
   }
 
   /**
@@ -413,143 +317,10 @@ class ZormUtil {
    * @returns mock
    */
   static mock<TSchema extends ZodSchema>(schema: TSchema): TSchema["_type"] {
-    const shape = ZormUtil.object(schema);
-    const mock = ZormUtil.shapeOut(shape);
+    const shape = object(schema);
+    const mock = shapeOut(shape);
 
     return mock ?? {};
-  }
-
-  /**
-   * Recursive transform zod schema to native object
-   * @param schema
-   * @returns object
-   */
-  private static shapeOut<TSchema extends ZodRawShape>(
-    schema: TSchema
-  ): Record<PropertyKey, any> | null {
-    if (schema.constructor === Object) {
-      const keys = Object.keys(schema);
-      if (keys.length === 0) return null;
-      return keys.reduce((obj, key) => {
-        const value = ZormUtil.through(schema[key] as ZodSchema);
-
-        if (value instanceof ZodObject) {
-          return { ...obj, [key]: this.shapeOut(ZormUtil.shape(value)) };
-        }
-
-        if (value instanceof ZodArray) {
-          return { ...obj, [key]: [this.shapeOut(ZormUtil.shape(value))] };
-        }
-
-        return { ...obj, [key]: null };
-      }, {});
-    }
-
-    return null;
-  }
-
-  /**
-   * Assert schema is a ZodObject
-   * @param schema
-   * @returns boolean
-   */
-  private static object<TSchema extends ZodSchema>(
-    schema: TSchema
-  ): ZodRawShape {
-    const schemaObject = ZormUtil.through(schema);
-    if (schemaObject instanceof ZodObject) return schemaObject.shape;
-    throw new Error("The schema type must be a object");
-  }
-
-  /**
-   * Assert schema is a ZodArray
-   * @param schema
-   * @returns boolean
-   */
-  private static array<TSchema extends ZodSchema>(schema: TSchema): ZodSchema {
-    const schemaArray = ZormUtil.through(schema);
-    if (schemaArray instanceof ZodArray) return schemaArray.element;
-    throw new Error("The schema type must be a array");
-  }
-
-  /**
-   * Assert schema has a promise function
-   * @param schema
-   */
-  static promises<TSchema extends ZodSchema>(schema: TSchema): boolean {
-    try {
-      schema.parse(z.NEVER, { async: true });
-    } catch (error) {
-      return (
-        error instanceof Error &&
-        error.message === "Synchronous parse encountered promise."
-      );
-    }
-    return false;
-  }
-
-  /**
-   * Remove all effects, optionals etc
-   */
-  static through<TSchema extends ZodSchema>(schema: TSchema, promise = true) {
-    let out = schema;
-    while (ZormUtil.outable(out, promise))
-      try {
-        out = ZormUtil.out(out, promise);
-      } catch (error) {
-        break;
-      }
-
-    return out;
-  }
-
-  /**
-   * Get schema shape
-   * @param schema
-   * @returns shape
-   */
-  static shape<TSchema extends ZodSchema>(schema: TSchema): any {
-    if (schema instanceof ZodArray || schema instanceof ZodRecord)
-      return ZormUtil.shape(ZormUtil.through(schema.element));
-
-    if (schema instanceof ZodObject) return schema.shape;
-
-    return schema;
-  }
-
-  /**
-   * Out schema from other effects
-   * @param schema
-   * @returns
-   */
-  static out<TSchema extends ZodSchema>(schema: TSchema, effect = true) {
-    if (
-      schema instanceof ZodOptional ||
-      schema instanceof ZodNullable ||
-      schema instanceof ZodBranded ||
-      schema instanceof ZodPromise ||
-      schema instanceof ZodBranded
-    )
-      return schema.unwrap();
-
-    if (effect && schema instanceof ZodEffects) return schema.innerType();
-
-    throw new Error(`schema ${schema.description} can't be outed`);
-  }
-
-  /**
-   * Return if schema have effects
-   * @param schema
-   * @returns boolean
-   */
-  static outable<TSchema extends ZodSchema>(schema: TSchema, effect = true) {
-    return (
-      (effect && schema instanceof ZodEffects) ||
-      schema instanceof ZodOptional ||
-      schema instanceof ZodBranded ||
-      schema instanceof ZodNullable ||
-      schema instanceof ZodPromise
-    );
   }
 }
 
@@ -561,9 +332,9 @@ type DeepRemoveOptionals<T> = T extends object
 
 type DeepWrapField<T, P extends string = ""> = {
   [K in keyof T]: T[K] extends any[]
-    ? <TIndex>(index?: TIndex) => TIndex extends number
-        ? DeepWrapField<T[K][number], `${P}[${K & string}][${TIndex}]`> & {
-            name: () => `${P}[${K & string}][${TIndex}]`;
+    ? <I>(index?: I) => I extends number
+        ? DeepWrapField<T[K][number], `${P}[${K & string}][${I}]`> & {
+            name: () => `${P}[${K & string}][${I}]`;
           }
         : {
             name: () => `${P}[${K & string}]`;
@@ -577,7 +348,7 @@ type DeepWrapField<T, P extends string = ""> = {
 
 type DeepWrapError<T> = {
   [K in keyof T]: T[K] extends any[]
-    ? <TIndex>(index?: TIndex) => TIndex extends number
+    ? <I>(index?: I) => I extends number
         ? DeepWrapError<T[K][number]> & {
             errors: () => ZodError<T[K]>["errors"] | undefined;
           }
