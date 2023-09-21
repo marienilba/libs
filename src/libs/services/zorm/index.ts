@@ -19,6 +19,7 @@ import {
   ZodBranded,
   ZodEffects,
   ZodError,
+  ZodIssue,
   ZodNullable,
   ZodObject,
   ZodOptional,
@@ -34,7 +35,7 @@ export function useZorm<TSchema extends ZodSchema>(
   submit: (
     event: React.FormEvent<HTMLFormElement> &
       z.SafeParseReturnType<z.infer<TSchema>, z.infer<TSchema>>
-  ) => void | Promise<void>
+  ) => ZodError<TSchema> | void | Promise<void | ZodError<TSchema>>
 ) {
   const [errors, setErrors] = useState<z.ZodError<z.infer<TSchema>>>(
     new ZodError([])
@@ -48,7 +49,8 @@ export function useZorm<TSchema extends ZodSchema>(
         if (ZormUtil.promises(schema)) event.preventDefault();
         const result = await ZormUtil.process(schema, event);
         setErrors(result.success ? new ZodError([]) : result.error);
-        submit(Object.assign(event, result));
+        const ctx = await submit(Object.assign(event, result));
+        if (ctx) setErrors(ctx);
       },
     },
     fields: ZormUtil.generateFields(mock),

@@ -2,7 +2,7 @@
 
 import { useZorm } from "@/libs/services/zorm";
 import { useRef } from "react";
-import { z } from "zod";
+import { ZodError, z } from "zod";
 
 const password = z
   .string()
@@ -31,6 +31,8 @@ export default function Home() {
     event.preventDefault();
     if (event.success) console.log(event.data); // OK
     else console.log(event.error);
+
+    return new ZodError([]);
   });
 
   return (
