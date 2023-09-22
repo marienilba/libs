@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncURL } from "@/libs/services/syncURL";
+import { Together } from "@/libs/types";
 import {
   AriaAttributes,
   ComponentProps,
@@ -15,7 +16,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { ZodRawShape, z } from "zod";
+import { z } from "zod";
 
 const DataTable = () => {};
 
@@ -38,12 +39,32 @@ export type Loader = (
   states: Immutable[]
 ) => Promise<LoaderData>;
 
-type BuildLoader = (params: LoaderParams, states: unknown[]) => unknown;
+type BuildLoader = (
+  params: LoaderParams,
+  states: unknown[]
+) => LoaderData | Promise<LoaderData>;
 
 DataTable.buildLoader = function <TLoader extends BuildLoader>(
   loader: TLoader
 ) {
   return loader;
+};
+
+DataTable.buildURL = function <
+  TUrl extends string,
+  TParams extends { [x: PropertyKey]: string | number | boolean }
+>(url: TUrl, params: TParams) {
+  const queryParams = Object.entries(params)
+    .map(
+      ([key, value]) =>
+        `${encodeURIComponent(key)}=${encodeURIComponent(value)}`
+    )
+    .join("&");
+
+  const fullUrl = new URL(url);
+  fullUrl.search = queryParams;
+
+  return fullUrl;
 };
 
 type FetchState = {
@@ -119,8 +140,6 @@ type RootRef<TLoader extends Loader> = {
   getStates: () => Immutable[];
   getState: () => FetchState;
 } & ContextSetter;
-
-type Together<TObj> = TObj | { [K in keyof TObj]?: never };
 
 type RootProps<TLoader extends Loader> = {
   children: ReactNode;
@@ -422,7 +441,6 @@ DataTable.Body = function <
 DataTable.Row = ({ children, ...props }: ComponentProps<"tr">) => (
   <tr {...props}>{children}</tr>
 );
-
 DataTable.Data = ({ children, ...props }: ComponentProps<"td">) => (
   <td {...props}>{children}</td>
 );
@@ -648,4 +666,5 @@ export const {
   Pages,
   Total,
   buildLoader,
+  buildURL,
 } = DataTable;

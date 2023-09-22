@@ -1,14 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import {
-  ZodObject,
-  ZodOptional,
-  ZodRawShape,
-  ZodSchema,
-  ZodTypeAny,
-  z,
-} from "zod";
+import { ZodObject, ZodOptional, ZodTypeAny, z } from "zod";
 
 type JSONString = {} & string;
 
@@ -100,7 +93,7 @@ export function useSyncURL<TSchema extends ZodObject<ZodRawOptionalShape>>(
     try {
       return schema.parse(stringify);
     } catch (error) {
-      return {};
+      return null;
     }
   }, [stringify]);
 
@@ -125,8 +118,11 @@ export function useSyncURLSelector<
 >(
   data: T,
   selector: P,
-  initialValue: ReturnType<P>
-): readonly [ReturnType<P>, (value: ReturnType<P>) => void];
+  initialValue: NonNullable<ReturnType<P>>
+): readonly [
+  NonNullable<ReturnType<P>>,
+  (value: NonNullable<ReturnType<P>>) => void
+];
 export function useSyncURLSelector<
   T extends Record<PropertyKey, any> | null,
   P extends (selector: NonNullable<T>) => NonNullable<T>[keyof NonNullable<T>]
@@ -139,11 +135,12 @@ export function useSyncURLSelector<
   (value: ReturnType<P> | undefined) => void
 ] {
   const key = selector(proxy as any) as keyof T;
-  const state = useMemo<typeof initialValue>(
-    () => (data ? data[key] : initialValue),
+  const state = useMemo<ReturnType<P> | undefined>(
+    () => (data ? data[key] ?? initialValue : initialValue),
     [data]
   );
-  const setState = (state: typeof initialValue) =>
+
+  const setState = (state: ReturnType<P> | undefined) =>
     replaceHistory({ [key]: state });
 
   useEffect(() => {

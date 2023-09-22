@@ -23,8 +23,10 @@ export default function Home() {
       {JSON.stringify(data)}
       <button
         onClick={() => {
-          data.size = 20;
-          set(data);
+          if (data) {
+            data.size = 20;
+            set(data);
+          }
         }}
         className="bg-slate-900 text-white px-2.5 py-1 rounded cursor-pointer hover:bg-slate-950 focus-within:bg-slate-800"
       >

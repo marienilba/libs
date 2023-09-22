@@ -1,5 +1,7 @@
 "use client";
 
+import json from "../../libs/components/datatable/data.json";
+const users: User[] = json as any;
 import { DataTable } from "@/libs/components/datatable";
 import { DataTableRef } from "@/libs/components/datatable/datatable";
 import { useSyncURL, useSyncURLSelector } from "@/libs/services/syncURL";
@@ -9,24 +11,59 @@ import { z } from "zod";
 const schema = z.object({ q: z.string() }).deepPartial();
 
 export default function Home() {
-  const { data, set } = useSyncURL(schema);
-  const [search, setSearch] = useSyncURLSelector(
-    data,
-    (data) => data.q,
-    "myboy"
-  );
+  const { data } = useSyncURL(schema);
+  const [search, setSearch] = useSyncURLSelector(data, (data) => data.q, "");
 
+  // Fetch example
   const loader = DataTable.buildLoader(({ page, size, order }, [search]) =>
     fetch(
-      "https://dummyjson.com/users/search?limit=" +
-        size +
-        "&skip=" +
-        page * size +
-        "&q=" +
-        search?.toString()
+      DataTable.buildURL("https://dummyjson.com/users/search", {
+        limit: size,
+        skip: page * size,
+        q: search as string,
+      })
     )
       .then((r) => r.json() as Promise<JSONData>)
       .then((d) => ({ data: d.users, total: d.total }))
+      .catch(() => ({ data: [], total: 0 }))
+  );
+
+  // Raw data example
+  const usersLoader = DataTable.buildLoader(
+    async ({ page, size, order }, [search]) => {
+      let filtered =
+        search && typeof search === "string"
+          ? users.filter(
+              (u) =>
+                u.lastName.toLowerCase().includes(search.toLowerCase()) ||
+                u.firstName.toLowerCase().includes(search.toLowerCase())
+            )
+          : users;
+
+      let data = structuredClone(filtered);
+
+      Array.from(order)
+        .filter(([_, dir]) => dir !== "none")
+        .map(
+          ([col, dir]) =>
+            [col, dir === "ascending" ? 1 : 0] as [keyof User, 1 | 0]
+        )
+        .forEach(([col, gte]) =>
+          data.sort((a, b) => {
+            return gte
+              ? a[col]! > b[col]!
+                ? 1
+                : -1
+              : b[col]! > a[col]!
+              ? 1
+              : -1;
+          })
+        );
+
+      data = filtered.slice(page * size, page * size + size);
+
+      return { data: data, total: filtered.length };
+    }
   );
 
   const ref = useRef<DataTableRef<typeof loader>>(null);
@@ -41,7 +78,7 @@ export default function Home() {
       >
         Refetch
       </button>
-      <DataTable.Root ref={ref} loader={loader} states={[search]} history>
+      <DataTable.Root ref={ref} loader={usersLoader} states={[search]} history>
         <div className="flex items-center justify-between">
           <DataTable.Size className="text-sm rounded block p-2.5 bg-slate-800 border border-slate-700 placeholder-slate-500 text-white my-4" />
           <input
@@ -112,6 +149,65 @@ export default function Home() {
   );
 }
 
+const Arrow = ({ ...props }: ComponentProps<"svg">) => (
+  <svg
+    fill="none"
+    viewBox="0 0 24 24"
+    strokeWidth="4"
+    stroke="currentColor"
+    {...props}
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M15.75 19.5L8.25 12l7.5-7.5"
+    />
+  </svg>
+);
+
+const DoubleArrow = ({ ...props }: ComponentProps<"svg">) => (
+  <svg
+    fill="none"
+    viewBox="0 0 24 24"
+    strokeWidth="3"
+    stroke="currentColor"
+    {...props}
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5"
+    />
+  </svg>
+);
+
+const NoResult = () => (
+  <div className="bg-slate-950 w-full text-white text-center text-2xl font-extrabold ">
+    No user found 😞
+  </div>
+);
+
+const Order = ({ label }: { label: string }) => (
+  <div className="flex items-center justify-center gap-2">
+    <p>{label}</p>
+    <DataTable.Order className="cursor-pointer group-data-[direction=descending]:rotate-180 transition-transform duration-300">
+      <svg
+        fill="none"
+        viewBox="0 0 24 24"
+        strokeWidth="1.5"
+        stroke="currentColor"
+        className="w-4 h-4"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18"
+        />
+      </svg>
+    </DataTable.Order>
+  </div>
+);
+
 interface User {
   id: number;
   firstName: string;
@@ -180,62 +276,3 @@ interface JSONData {
   skip: number;
   limit: number;
 }
-
-const Arrow = ({ ...props }: ComponentProps<"svg">) => (
-  <svg
-    fill="none"
-    viewBox="0 0 24 24"
-    strokeWidth="4"
-    stroke="currentColor"
-    {...props}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M15.75 19.5L8.25 12l7.5-7.5"
-    />
-  </svg>
-);
-
-const DoubleArrow = ({ ...props }: ComponentProps<"svg">) => (
-  <svg
-    fill="none"
-    viewBox="0 0 24 24"
-    strokeWidth="3"
-    stroke="currentColor"
-    {...props}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M18.75 19.5l-7.5-7.5 7.5-7.5m-6 15L5.25 12l7.5-7.5"
-    />
-  </svg>
-);
-
-const NoResult = () => (
-  <div className="bg-slate-950 w-full text-white text-center text-2xl font-extrabold ">
-    No user found 😞
-  </div>
-);
-
-const Order = ({ label }: { label: string }) => (
-  <div className="flex items-center justify-center gap-2">
-    <p>{label}</p>
-    <DataTable.Order className="cursor-pointer group-data-[direction=descending]:rotate-180 transition-transform duration-300">
-      <svg
-        fill="none"
-        viewBox="0 0 24 24"
-        strokeWidth="1.5"
-        stroke="currentColor"
-        className="w-4 h-4"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18"
-        />
-      </svg>
-    </DataTable.Order>
-  </div>
-);

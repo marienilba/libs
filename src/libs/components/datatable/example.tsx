@@ -1,11 +1,18 @@
 "use client";
 
+import users from "./data.json";
 import { DataTable } from "@/libs/components/datatable";
 import { DataTableRef } from "@/libs/components/datatable/datatable";
-import { ComponentProps, useRef, useState } from "react";
+import { useSyncURL, useSyncURLSelector } from "@/libs/services/syncURL";
+import { ComponentProps, useRef } from "react";
+import { z } from "zod";
+
+const schema = z.object({ q: z.string() }).deepPartial();
 
 export default function Home() {
-  const [search, setSearch] = useState<string>("");
+  const { data } = useSyncURL(schema);
+  const [search, setSearch] = useSyncURLSelector(data, (data) => data.q, "");
+
   const loader = DataTable.buildLoader(({ page, size, order }, [search]) =>
     fetch(
       "https://dummyjson.com/users/search?limit=" +
@@ -13,11 +20,16 @@ export default function Home() {
         "&skip=" +
         page * size +
         "&q=" +
-        search?.toString()
+        (search?.toString() ?? "")
     )
       .then((r) => r.json() as Promise<JSONData>)
       .then((d) => ({ data: d.users, total: d.total }))
+      .catch(() => ({ data: [], total: 0 }))
   );
+
+  const usersLoader = DataTable.buildLoader(({ page, size, order }) => {
+    return { data: users, total: users.length };
+  });
 
   const ref = useRef<DataTableRef<typeof loader>>(null);
 
@@ -31,7 +43,7 @@ export default function Home() {
       >
         Refetch
       </button>
-      <DataTable.Root ref={ref} loader={loader} states={[search]}>
+      <DataTable.Root ref={ref} loader={loader} states={[search]} history>
         <div className="flex items-center justify-between">
           <DataTable.Size className="text-sm rounded block p-2.5 bg-slate-800 border border-slate-700 placeholder-slate-500 text-white my-4" />
           <input
@@ -47,29 +59,11 @@ export default function Home() {
           fallback={NoResult}
         >
           <DataTable.Header>
-            <DataTable.Col
-              name="firstName"
-              className="px-4 py-2 flex text-center justify-center items-center gap-2 group"
-            >
-              firstName
-              <DataTable.Order className="cursor-pointer group-data-[direction=descending]:rotate-180 transition-transform duration-300">
-                <svg
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth="1.5"
-                  stroke="currentColor"
-                  className="w-4 h-4"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18"
-                  />
-                </svg>
-              </DataTable.Order>
+            <DataTable.Col name="firstName" className="px-4 py-2 group">
+              <Order label="firstName" />
             </DataTable.Col>
-            <DataTable.Col name="lastName" className="px-4 py-2">
-              lastName
+            <DataTable.Col name="lastName" className="px-4 py-2 group">
+              <Order label="lastName" />
             </DataTable.Col>
             <DataTable.Col name="age" className="px-4 py-2">
               age
@@ -224,5 +218,26 @@ const DoubleArrow = ({ ...props }: ComponentProps<"svg">) => (
 const NoResult = () => (
   <div className="bg-slate-950 w-full text-white text-center text-2xl font-extrabold ">
     No user found 😞
+  </div>
+);
+
+const Order = ({ label }: { label: string }) => (
+  <div className="flex items-center justify-center gap-2">
+    <p>{label}</p>
+    <DataTable.Order className="cursor-pointer group-data-[direction=descending]:rotate-180 transition-transform duration-300">
+      <svg
+        fill="none"
+        viewBox="0 0 24 24"
+        strokeWidth="1.5"
+        stroke="currentColor"
+        className="w-4 h-4"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M4.5 10.5L12 3m0 0l7.5 7.5M12 3v18"
+        />
+      </svg>
+    </DataTable.Order>
   </div>
 );
