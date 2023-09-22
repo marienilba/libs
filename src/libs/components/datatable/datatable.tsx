@@ -1,5 +1,6 @@
 "use client";
 
+import { useSyncURL } from "@/libs/services/syncURL";
 import {
   AriaAttributes,
   ComponentProps,
@@ -11,9 +12,10 @@ import {
   useContext,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useState,
 } from "react";
-import { z } from "zod";
+import { ZodRawShape, z } from "zod";
 
 const DataTable = () => {};
 
@@ -45,12 +47,14 @@ DataTable.buildLoader = function <TLoader extends BuildLoader>(
 };
 
 type FetchState = {
+  mount: boolean;
   loading: boolean;
   error: boolean;
   success: boolean;
 };
 
 const ContextFetch = createContext<FetchState>({
+  mount: false,
   loading: true,
   error: false,
   success: false,
@@ -60,6 +64,21 @@ const ContextLoader = createContext<LoaderData>({
   data: [],
   total: 0,
 });
+
+const SIZES = [10, 20, 30] as const;
+const DEFAULT_SIZE: (typeof SIZES)[number] = 10;
+const VALID_SIZE = (defaultSize: number, sizes: readonly number[]) => {
+  if (sizes.includes(defaultSize)) return defaultSize;
+  else
+    throw new Error(
+      `Invalid defaultSize ${defaultSize} not included in ${sizes.join(" | ")}`
+    );
+};
+
+const ContextRootParams = createContext<{
+  sizes: readonly number[];
+  defaultSize: number;
+}>({ sizes: SIZES, defaultSize: DEFAULT_SIZE });
 
 const ContextParams = createContext<LoaderParams>({
   page: 0,
@@ -90,12 +109,6 @@ type Immutable =
   | readonly [any, ...any[]]
   | { readonly [key: string]: any };
 
-type RootProps<TLoader extends Loader> = {
-  children: ReactNode;
-  loader: TLoader;
-  states?: Immutable[];
-};
-
 type RootRef<TLoader extends Loader> = {
   refetch: (states?: Immutable[]) => ReturnType<TLoader>;
   getPage: () => number;
@@ -107,13 +120,40 @@ type RootRef<TLoader extends Loader> = {
   getState: () => FetchState;
 } & ContextSetter;
 
+type Together<TObj> = TObj | { [K in keyof TObj]?: never };
+
+type RootProps<TLoader extends Loader> = {
+  children: ReactNode;
+  loader: TLoader;
+  states?: Immutable[];
+  history?: boolean;
+} & Together<{ sizes: readonly number[]; defaultSize?: number }>;
+
 export type DataTableRef<TLoader extends Loader> = RootRef<TLoader>;
 
 function fowardedRoot<TLoader extends Loader>(
-  { children, loader, states = [] }: RootProps<TLoader>,
+  {
+    children,
+    loader,
+    states = [],
+    sizes = SIZES,
+    defaultSize = DEFAULT_SIZE,
+    history,
+  }: RootProps<TLoader>,
   forwardRef: Ref<RootRef<TLoader>>
 ) {
+  let { data, set } = useSyncURL(historySchema);
+  const historyMounted = useMemo(() => {
+    return (
+      data !== null &&
+      Object.keys(data)
+        .map((k) => data![k])
+        .every((v) => v !== undefined)
+    );
+  }, [data]);
+
   const [state, setState] = useState<FetchState>({
+    mount: false,
     loading: true,
     error: false,
     success: false,
@@ -121,7 +161,7 @@ function fowardedRoot<TLoader extends Loader>(
 
   const [params, setParams] = useState<LoaderParams>({
     page: 0,
-    size: 10,
+    size: defaultSize ? VALID_SIZE(defaultSize, sizes) : sizes[0],
     order: new Map(),
   });
 
@@ -138,8 +178,27 @@ function fowardedRoot<TLoader extends Loader>(
 
     return loader(params, states)
       .then(setRes)
-      .then(() => setState({ loading: false, success: true, error: false }))
-      .catch(() => setState({ loading: false, success: false, error: true }));
+      .then(
+        () =>
+          history &&
+          state.mount &&
+          set({
+            page: params.page,
+            size: params.size,
+            asc: Array.from(params.order)
+              .filter(([_, d]) => d === "ascending")
+              .map(([c, _]) => c),
+            desc: Array.from(params.order)
+              .filter(([_, d]) => d === "descending")
+              .map(([c, _]) => c),
+          })
+      )
+      .then(() =>
+        setState({ mount: true, loading: false, success: true, error: false })
+      )
+      .catch(() =>
+        setState({ mount: true, loading: false, success: false, error: true })
+      );
   };
 
   const changeOrder = ([name, direction]: OrderItem) => {
@@ -192,10 +251,29 @@ function fowardedRoot<TLoader extends Loader>(
       return loader(params, sts || states)
         .then((result) => {
           setRes(result);
-          setState({ loading: false, success: true, error: false });
+          history &&
+            state.mount &&
+            set({
+              page: params.page,
+              size: params.size,
+              asc: Array.from(params.order)
+                .filter(([_, d]) => d === "ascending")
+                .map(([c, _]) => c),
+              desc: Array.from(params.order)
+                .filter(([_, d]) => d === "descending")
+                .map(([c, _]) => c),
+            });
+          setState({
+            mount: true,
+            loading: false,
+            success: true,
+            error: false,
+          });
           return result;
         })
-        .catch(() => setState({ loading: false, success: false, error: true }));
+        .catch(() =>
+          setState({ mount: true, loading: false, success: false, error: true })
+        );
     },
     getStates: () => states,
     changeOrder,
@@ -205,9 +283,29 @@ function fowardedRoot<TLoader extends Loader>(
   }));
 
   useEffect(() => {
-    setParams((p) => ({ ...p, page: 0 }));
-    load();
-  }, [...states]);
+    // setParams to query params before loading
+
+    if (!history) {
+      setParams((p) => ({ ...p, page: 0 }));
+      load();
+    } else if (history && historyMounted) {
+      if (state.mount) {
+        setParams((p) => ({ ...p, page: 0 }));
+        load();
+      } else {
+        const historyParams = mapHistory(data!);
+        // React would not update before load()
+        params.page = historyParams.page ?? 0;
+        params.size = historyParams.size ?? params.size;
+        params.order = historyParams.order?.size
+          ? historyParams.order
+          : params.order;
+        // Update components
+        setParams((p) => ({ ...historyParams, ...p }));
+        load();
+      }
+    }
+  }, [...states, historyMounted]);
 
   return (
     <ContextLoader.Provider value={res}>
@@ -220,7 +318,9 @@ function fowardedRoot<TLoader extends Loader>(
               changePage,
             }}
           >
-            {children}
+            <ContextRootParams.Provider value={{ sizes, defaultSize }}>
+              {children}
+            </ContextRootParams.Provider>
           </ContextSetter.Provider>
         </ContextParams.Provider>
       </ContextFetch.Provider>
@@ -295,20 +395,25 @@ type GetLoaderData<TLoader extends Loader> = Awaited<
   ReturnType<TLoader>
 >["data"][number];
 
-type BodyProps<TLoader extends Loader> = {
-  children: (data: GetLoaderData<TLoader>) => ReactNode;
+type BodyProps<TLoader extends Loader | Record<PropertyKey, any>[]> = {
+  children: (
+    data: TLoader extends Loader
+      ? GetLoaderData<TLoader>
+      : TLoader extends Record<PropertyKey, any>[]
+      ? TLoader[number]
+      : never
+  ) => ReactNode;
 } & Omit<ComponentProps<"tbody">, "children">;
 
-DataTable.Body = function <TLoader extends Loader>({
-  children,
-  ...props
-}: BodyProps<TLoader>) {
+DataTable.Body = function <
+  TLoader extends Loader | Array<Record<PropertyKey, any>>
+>({ children, ...props }: BodyProps<TLoader>) {
   const { data: datas } = useContext(ContextLoader);
 
   return (
     <tbody {...props}>
       {datas.map((data, index) => (
-        <Fragment key={index}>{children(data)}</Fragment>
+        <Fragment key={index}>{children(data as any)}</Fragment>
       ))}
     </tbody>
   );
@@ -322,12 +427,11 @@ DataTable.Data = ({ children, ...props }: ComponentProps<"td">) => (
   <td {...props}>{children}</td>
 );
 
-type SizeProps = {
-  sizes: number[];
-} & Omit<ComponentProps<"select">, "children">;
+type SizeProps = Omit<ComponentProps<"select">, "children">;
 
-DataTable.Size = ({ sizes, ...props }: SizeProps) => {
+DataTable.Size = ({ ...props }: SizeProps) => {
   const { changeSize } = useContext(ContextSetter);
+  const { sizes } = useContext(ContextRootParams);
   const { size } = useContext(ContextParams);
 
   return (
@@ -495,6 +599,39 @@ DataTable.Total = ({ ...props }: Omit<ComponentProps<"span">, "children">) => {
   const { total } = useContext(ContextLoader);
   return <span {...props}>{total}</span>;
 };
+
+const historySchema = z
+  .object({
+    page: z.coerce.number().int().min(0),
+    size: z.coerce.number().int().min(0),
+    asc: z.union([z.string(), z.array(z.string())]),
+    desc: z.union([z.string(), z.array(z.string())]),
+  })
+  .deepPartial();
+
+type HistorySchema = z.infer<typeof historySchema>;
+
+const mapHistory = (data: HistorySchema): Partial<LoaderParams> => ({
+  page: data.page,
+  size: data.size,
+  order:
+    data.asc || data.desc
+      ? (data.asc ? (!Array.isArray(data.asc) ? [data.asc] : data.asc) : [])
+          .map((value) => [value, "ascending"])
+          .concat(
+            (data.desc
+              ? !Array.isArray(data.desc)
+                ? [data.desc]
+                : data.desc
+              : []
+            ).map((value) => [value, "descending"])
+          )
+          .reduce<Order>(
+            (prev, [v, o]) => prev.set(v, o as OrderDir),
+            new Map()
+          )
+      : new Map(),
+});
 
 export const {
   Root,

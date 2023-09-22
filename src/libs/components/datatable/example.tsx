@@ -33,11 +33,7 @@ export default function Home() {
       </button>
       <DataTable.Root ref={ref} loader={loader} states={[search]}>
         <div className="flex items-center justify-between">
-          <DataTable.Size
-            sizes={[10, 20, 30]}
-            className="text-sm rounded block p-2.5 bg-slate-800 border border-slate-700 placeholder-slate-500 text-white my-4"
-          />
-
+          <DataTable.Size className="text-sm rounded block p-2.5 bg-slate-800 border border-slate-700 placeholder-slate-500 text-white my-4" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}

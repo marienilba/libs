@@ -14,22 +14,9 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  ZodArray,
-  ZodBranded,
-  ZodEffects,
-  ZodError,
-  ZodNullable,
-  ZodObject,
-  ZodOptional,
-  ZodPromise,
-  ZodRawShape,
-  ZodRecord,
-  ZodSchema,
-  z,
-} from "zod";
-import { implied, isNumericKeys, outObject, pathArray } from "./utils";
+import { ZodArray, ZodError, ZodObject, ZodSchema, z } from "zod";
 import { mapObject } from "./form-utils";
+import { implied, outObject, pathArray } from "./utils";
 import {
   array,
   findError,
