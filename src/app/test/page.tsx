@@ -78,7 +78,7 @@ export default function Home() {
       >
         Refetch
       </button>
-      <DataTable.Root ref={ref} loader={usersLoader} states={[search]} history>
+      <DataTable.Root ref={ref} loader={loader} states={[search]} history>
         <div className="flex items-center justify-between">
           <DataTable.Size className="text-sm rounded block p-2.5 bg-slate-800 border border-slate-700 placeholder-slate-500 text-white my-4" />
           <input
@@ -94,26 +94,45 @@ export default function Home() {
           fallback={NoResult}
         >
           <DataTable.Header>
-            <DataTable.Col name="firstName" className="px-4 py-2 group">
+            <DataTable.Col
+              name="firstName"
+              className="px-4 py-2 group max-sm:hidden"
+            >
               <Order label="firstName" />
             </DataTable.Col>
-            <DataTable.Col name="lastName" className="px-4 py-2 group">
+            <DataTable.Col
+              name="lastName"
+              className="px-4 py-2 group max-sm:hidden"
+            >
               <Order label="lastName" />
             </DataTable.Col>
-            <DataTable.Col name="age" className="px-4 py-2">
+            <DataTable.Col name="age" className="px-4 py-2 max-sm:hidden">
               age
             </DataTable.Col>
           </DataTable.Header>
-          <DataTable.Body<typeof loader>>
+          <DataTable.Body<
+            typeof loader
+          > className="data-[loading=true]:opacity-50 data-[loading=true]:cursor-not-allowed">
             {({ firstName, lastName, age }) => (
               <DataTable.Row className="odd:bg-gray-700">
-                <DataTable.Data className="px-4 py-2">
+                <DataTable.Data
+                  data-cell="firstName"
+                  className="px-4 py-2 max-sm:py-1 max-sm:my-1 max-sm:grid max-sm:grid-cols-[15ch_auto] before:capitalize before:font-extrabold before:content-[attr(data-cell)_':_']"
+                >
                   {firstName}
                 </DataTable.Data>
-                <DataTable.Data className="px-4 py-2">
+                <DataTable.Data
+                  data-cell="lastName"
+                  className="px-4 py-2 max-sm:py-1 max-sm:my-1 max-sm:grid max-sm:grid-cols-[15ch_auto] before:capitalize before:font-extrabold before:content-[attr(data-cell)_':_']"
+                >
                   {lastName}
                 </DataTable.Data>
-                <DataTable.Data className="px-4 py-2">{age}</DataTable.Data>
+                <DataTable.Data
+                  data-cell="age"
+                  className="px-4 py-2 max-sm:py-1 max-sm:my-1 max-sm:grid max-sm:grid-cols-[15ch_auto] before:capitalize before:font-extrabold before:content-[attr(data-cell)_':_']"
+                >
+                  {age}
+                </DataTable.Data>
               </DataTable.Row>
             )}
           </DataTable.Body>
@@ -182,7 +201,7 @@ const DoubleArrow = ({ ...props }: ComponentProps<"svg">) => (
 );
 
 const NoResult = () => (
-  <div className="bg-slate-950 w-full text-white text-center text-2xl font-extrabold ">
+  <div className="bg-slate-950 w-full py-10 text-white text-center text-2xl font-extrabold ">
     No user found 😞
   </div>
 );

@@ -424,13 +424,14 @@ type BodyProps<TLoader extends Loader | Record<PropertyKey, any>[]> = {
   ) => ReactNode;
 } & Omit<ComponentProps<"tbody">, "children">;
 
-DataTable.Body = function <
-  TLoader extends Loader | Array<Record<PropertyKey, any>>
->({ children, ...props }: BodyProps<TLoader>) {
+DataTable.Body = function <TLoader extends Loader>({
+  children,
+  ...props
+}: BodyProps<TLoader>) {
   const { data: datas } = useContext(ContextLoader);
-
+  const { loading } = useContext(ContextFetch);
   return (
-    <tbody {...props}>
+    <tbody {...props} data-loading={loading}>
       {datas.map((data, index) => (
         <Fragment key={index}>{children(data as any)}</Fragment>
       ))}
