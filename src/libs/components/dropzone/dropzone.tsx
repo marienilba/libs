@@ -1,19 +1,15 @@
 "use client";
 
-import {
-  ComponentProps,
-  ReactNode,
-  createContext,
-  useContext,
-  useMemo,
-} from "react";
-import { DropSchema } from "./accept";
+import { ComponentProps, ReactNode, createContext, useContext } from "react";
+import { DropArraySchema, DropSchema } from "./accept";
 
 export const DropZone = () => <></>;
 
 const Context = createContext<{
   setFiles?: (files: File[]) => void;
 }>({ setFiles: (files) => {} });
+
+const ContextAccept = createContext<DropSchema | undefined>(undefined);
 
 type RootProps<T extends DropSchema> = {
   accept?: T;
@@ -30,10 +26,13 @@ DropZone.Root = <T extends DropSchema>({
   children,
   value,
   onChange,
+  accept,
 }: RootProps<T>) => {
   return (
     <Context.Provider value={{ setFiles: onChange }}>
-      {children(value ?? ([] as any))}
+      <ContextAccept.Provider value={accept}>
+        {children(value ?? ([] as any))}
+      </ContextAccept.Provider>
     </Context.Provider>
   );
 };
@@ -42,9 +41,12 @@ DropZone.Area = ({
   children,
   className,
   style,
+  multiple,
+  onChange,
   ...props
-}: Omit<ComponentProps<"input">, "type" | "onChange">) => {
+}: Omit<ComponentProps<"input">, "type">) => {
   const { setFiles } = useContext(Context);
+  const accept = useContext(ContextAccept);
   return (
     <div
       onDragOver={dataAttr}
@@ -54,13 +56,16 @@ DropZone.Area = ({
       onChange={dataAttr}
     >
       <input
-        multiple
-        onChange={(e) =>
+        onChange={(e) => {
+          onChange && onChange(e);
           e.target instanceof HTMLInputElement &&
-          e.target.files &&
-          setFiles &&
-          setFiles(Array.from(e.target.files))
-        }
+            e.target.files &&
+            setFiles &&
+            (accept
+              ? accept.parse(Array.from(e.target.files)) &&
+                setFiles(Array.from(e.target.files))
+              : setFiles(Array.from(e.target.files)));
+        }}
         data-dragged={String(false)}
         style={{
           opacity: 0,
@@ -69,6 +74,7 @@ DropZone.Area = ({
           height: "100%",
         }}
         type="file"
+        multiple={Boolean(accept instanceof DropArraySchema || multiple)}
         {...props}
       />
       {children}
@@ -76,7 +82,7 @@ DropZone.Area = ({
   );
 };
 
-type DropFile<T extends string = string> = File & { type: T };
+type DropFile<T extends string> = File & { type: T };
 
 const dataAttr = (
   e: React.DragEvent<HTMLDivElement> | React.FormEvent<HTMLDivElement>

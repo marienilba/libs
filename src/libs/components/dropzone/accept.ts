@@ -1,6 +1,11 @@
 export class DropSchema<TType extends AcceptValue = AcceptValue> {
   private _type?: TType;
   constructor() {}
+
+  // Overwritted by other schema
+  parse(file: File | File[]): File | File[] {
+    return file;
+  }
 }
 
 export class DropError {
@@ -33,12 +38,12 @@ export class DropArraySchema<
     return this;
   }
 
-  parse(files: FileList) {
+  parse(files: File[]) {
     if (this._max && files.length > this._max) throw new DropError("");
     if (this._min && files.length < this._min) throw new DropError("");
-    Array.from(files).every((file) => this._file.parse(file));
+    files.every((file) => this._file.parse(file));
 
-    return Array.from(files);
+    return files;
   }
 }
 
