@@ -33,3 +33,5 @@ export type OnlySingleObject<
 }> extends never
   ? never
   : TObjs;
+
+export type SyncOrAsync<T> = T | Promise<T>;
