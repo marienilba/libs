@@ -11,16 +11,13 @@ export default function Home() {
         </Step.Share>
         <Step.Step
           value={1}
-          className="flex flex-col gap-2 justify-center items-center data-[current=false]:hidden"
+          className="flex flex-col gap-2 justify-center items-center"
         >
-          Voluptates quis et fugiat maxime quisquam. Consequatur provident modi
-          illo eaque molestiae fuga nam dignissimos. Dolore dolores aspernatur
-          iure veniam quo voluptas. Ut nam harum velit. Voluptatem enim qui
-          voluptas id a. Sit nam soluta dolorem.
+          <input type="text" />
         </Step.Step>
         <Step.Step
           value={2}
-          className="flex flex-col gap-2 justify-center items-center data-[current=false]:hidden"
+          className="flex flex-col gap-2 justify-center items-center"
         >
           Rem numquam sit aut pariatur eius illum rerum. Inventore fugiat labore
           aut fuga laborum odio consequatur autem. Aut voluptatem vitae ipsam
@@ -30,7 +27,7 @@ export default function Home() {
         </Step.Step>
         <Step.Step
           value={3}
-          className="flex flex-col gap-2 justify-center items-center data-[current=false]:hidden"
+          className="flex flex-col gap-2 justify-center items-center"
         >
           Aperiam eius enim nobis veniam non. Enim est velit iure aut numquam.
           Facere ullam voluptatum et est incidunt doloribus. Error nulla autem
@@ -38,7 +35,7 @@ export default function Home() {
         </Step.Step>
         <Step.Step
           value={4}
-          className="flex flex-col gap-2 justify-center items-center data-[current=false]:hidden"
+          className="flex flex-col gap-2 justify-center items-center"
         >
           Totam doloremque et beatae id. Qui inventore qui voluptatibus nulla
           adipisci. Dignissimos maxime beatae cumque aperiam est. Tempora libero
@@ -46,7 +43,7 @@ export default function Home() {
         </Step.Step>
         <Step.Step
           value={5}
-          className="flex flex-col gap-2 justify-center items-center data-[current=false]:hidden"
+          className="flex flex-col gap-2 justify-center items-center"
         >
           Repellendus laborum eos unde itaque totam placeat veritatis facere.
           Dignissimos et quia veniam consequatur doloribus commodi totam. Quo

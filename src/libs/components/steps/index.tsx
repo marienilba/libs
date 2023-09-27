@@ -101,12 +101,17 @@ type StepProps = {
   children: ReactNode;
   share?: boolean;
 } & Omit<ComponentProps<"div">, "value" | "children">;
-Step.Step = ({ children, value, share = true, ...props }: StepProps) => {
+Step.Step = ({ children, value, share = true, style, ...props }: StepProps) => {
   const { start, end } = useContext(ContextShare);
   const { step } = useContext(ContextStep);
 
+  const hidden: CSSProperties = step === value ? {} : { display: "none" };
   return (
-    <div data-current={step === value} {...props}>
+    <div
+      data-current={step === value}
+      style={{ ...style, ...hidden }}
+      {...props}
+    >
       {share ? start : <></>}
       {children}
       {share ? end : <></>}
