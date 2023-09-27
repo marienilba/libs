@@ -12,7 +12,7 @@ import React, {
 } from "react";
 import { ComponentProps, ReactNode } from "react";
 
-export const Step = () => <></>;
+export const Steps = () => <></>;
 
 const ContextShare = createContext<{
   start: (
@@ -44,12 +44,12 @@ type RootProps = {
   children: ReactNode;
 };
 
-Step.Root = ({ children, value = 1, onChange }: RootProps) => {
+Steps.Root = ({ children, value = 1, onChange }: RootProps) => {
   const shares = useMemo(
     () =>
       (
         React.Children.map(children, (child) => {
-          if (React.isValidElement(child) && child.type === Step.Share) {
+          if (React.isValidElement(child) && child.type === Steps.Share) {
             return child;
           }
         }) ?? []
@@ -69,7 +69,7 @@ Step.Root = ({ children, value = 1, onChange }: RootProps) => {
     () =>
       (
         React.Children.map(children, (child) => {
-          if (React.isValidElement(child) && child.type === Step.Step) {
+          if (React.isValidElement(child) && child.type === Steps.Step) {
             return child;
           }
         }) ?? []
@@ -101,7 +101,13 @@ type StepProps = {
   children: ReactNode;
   share?: boolean;
 } & Omit<ComponentProps<"div">, "value" | "children">;
-Step.Step = ({ children, value, share = true, style, ...props }: StepProps) => {
+Steps.Step = ({
+  children,
+  value,
+  share = true,
+  style,
+  ...props
+}: StepProps) => {
   const { start, end } = useContext(ContextShare);
   const { step } = useContext(ContextStep);
 
@@ -125,7 +131,7 @@ type ButtonProps = {
     length: number
   ) => void;
 } & Omit<ComponentProps<"button">, "onClick">;
-Step.Button = ({ children, onClick, ...props }: ButtonProps) => {
+Steps.Button = ({ children, onClick, ...props }: ButtonProps) => {
   const { setStep, length, step } = useContext(ContextStep);
   return (
     <button
@@ -150,7 +156,7 @@ type ShareProps<T extends keyof JSX.IntrinsicElements> = {
 } & Apart<{ start: true }, { end: true }> &
   As<T>;
 
-Step.Share = <T extends keyof JSX.IntrinsicElements>({
+Steps.Share = <T extends keyof JSX.IntrinsicElements>({
   children,
   start,
   end,
