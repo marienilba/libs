@@ -16,6 +16,7 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
   ? I
   : never;
 type IsUnion<T> = [T] extends [UnionToIntersection<T>] ? false : true;
+type IntersectionOf<A extends any[]> = UnionToIntersection<A[number]>;
 
 export type SingleObject<TObj extends { [x: PropertyKey]: PropertyKey }> =
   IsUnion<keyof TObj> extends true ? never : TObj;
@@ -35,3 +36,29 @@ export type OnlySingleObject<
   : TObjs;
 
 export type SyncOrAsync<T> = T | Promise<T>;
+export type ReturnAsyncType<T extends (...args: any) => any> = Awaited<
+  ReturnType<T>
+>;
+
+export type Prettify<T> = {
+  [K in keyof T]: T[K];
+} & {};
+
+export type DeepWriteable<T> = {
+  -readonly [P in keyof T]: DeepWriteable<T[P]>;
+};
+
+type ArrayLengthMutationKeys =
+  | "splice"
+  | "push"
+  | "pop"
+  | "shift"
+  | "unshift"
+  | number;
+type ArrayItems<T extends Array<any>> = T extends Array<infer TItems>
+  ? TItems
+  : never;
+type FixedLengthArray<T extends any[]> = Pick<
+  T,
+  Exclude<keyof T, ArrayLengthMutationKeys>
+> & { [Symbol.iterator]: () => IterableIterator<ArrayItems<T>> };
