@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 
 type RecordK<T> = T extends Record<infer K, any> ? K : never;
 type RecordV<T> = T extends Record<any, infer V> ? V : never;
-type Observer<TObj extends Record<PropertyKey, any>> = TObj & {
+export type Observer<TObj extends Record<PropertyKey, any>> = TObj & {
   subscribe: <TKey extends keyof TObj>(
     key: TKey,
     callback: (value: TObj[TKey]) => void
