@@ -6,28 +6,31 @@ import {
   Children,
   ComponentProps,
   ReactNode,
+  RefObject,
   createContext,
   useContext,
   useEffect,
   useLayoutEffect,
   useRef,
+  useState,
 } from "react";
 
 export const Carousel = () => <></>;
 
 type Range = { min: number; max: number; length: number };
+type Scroll = { scroll: boolean };
 const Context = createContext<{
   refs: HTMLElement[];
   refsView: Map<number, boolean>;
   setRefsView: (value: number, inView: boolean) => void;
-  setLength: (length: number) => void;
   range: Observer<Range>;
+  scroll: Observer<Scroll>;
 }>({
   refs: [],
   refsView: new Map(),
   setRefsView: () => {},
-  setLength: () => {},
-  range: null as any,
+  range: {} as any,
+  scroll: {} as any,
 });
 
 type RootProps = {} & ComponentProps<"section">;
@@ -35,6 +38,7 @@ Carousel.Root = ({ children, ...props }: RootProps) => {
   const refs = useRef<HTMLElement[]>([]);
   const refsView = useRef<Map<number, boolean>>(new Map());
   const range = useObserver<Range>({ min: 0, max: 0, length: 0 });
+  const scroll = useObserver<Scroll>({ scroll: false });
 
   useLayoutEffect(() => {
     refs.current[0]?.scrollIntoView({ behavior: "instant" });
@@ -51,13 +55,14 @@ Carousel.Root = ({ children, ...props }: RootProps) => {
             .filter(([_, k]) => k)
             .map(([v]) => v);
 
-          range.min = Math.min(...inViews);
-          range.max = Math.max(...inViews);
-        },
-        setLength: (l) => {
-          range.length = l;
+          if (inViews.length) {
+            // Math.min/max of empty array give not finite result
+            range.min = Math.min(...inViews);
+            range.max = Math.max(...inViews);
+          }
         },
         range,
+        scroll,
       }}
     >
       <section {...props}>{children}</section>
@@ -74,14 +79,35 @@ Carousel.Items = <T extends keyof JSX.IntrinsicElements>({
   children,
   ...props
 }: ItemsProps<T>) => {
-  const { setLength } = useContext(Context);
-  // Cannot update a component (`Unknown`) while rendering a different component (`Unknown`)
-  // But useEffect dont work with useObserverState?
-  setLength(Children.count(children));
+  const { range, scroll } = useContext(Context);
+  const ref = useRef<HTMLElement>();
+  range.length = Children.count(children);
+
+  useEffect(() => {
+    const onScroll = (_: Event) => {
+      scroll.scroll = true;
+    };
+    const onScrollEnd = (_: Event) => {
+      scroll.scroll = false;
+    };
+
+    ref.current && ref.current.addEventListener("scroll", onScroll);
+    ref.current && ref.current.addEventListener("scrollend", onScrollEnd);
+
+    return () => {
+      ref.current && ref.current.removeEventListener("scroll", onScroll);
+      ref.current && ref.current.removeEventListener("scrollend", onScrollEnd);
+    };
+  }, [ref]);
 
   const Tag: T = as;
   // @ts-ignore
-  return <Tag {...props}>{children}</Tag>;
+  return (
+    // @ts-ignore
+    <Tag ref={ref} {...props}>
+      {children}
+    </Tag>
+  );
 };
 
 type ItemProps<T extends keyof JSX.IntrinsicElements> = {
@@ -132,7 +158,7 @@ Carousel.Item = <T extends keyof JSX.IntrinsicElements>({
 
 type ScrollInto = (
   index: number,
-  options: boolean | ScrollIntoViewOptions | undefined
+  options?: boolean | ScrollIntoViewOptions | undefined
 ) => void;
 type ButtonProps = {
   onClick: (
@@ -168,12 +194,63 @@ type RangeProps = {
 };
 Carousel.Range = ({ children }: RangeProps) => {
   const { range } = useContext(Context);
+  // Usefull for re-render, but lenght is buggy, should investigate
   const min = useObserverState(range, "min");
   const max = useObserverState(range, "max");
   const length = useObserverState(range, "length");
 
-  return <>{children({ max, min, length })}</>;
+  return <>{children(range)}</>;
 };
 
-type ProgressionProps = {};
-Carousel.Progression = ({}: ProgressionProps) => <></>;
+type ScrollToProps = {
+  value: number;
+  options?: boolean | ScrollIntoViewOptions | undefined;
+} & Omit<ComponentProps<"button">, "onClick" | "value">;
+Carousel.ScrollTo = ({ children, options, value, ...props }: ScrollToProps) => (
+  <Carousel.Button
+    onClick={(scrollInto, { min, max, length }) =>
+      scrollInto(
+        value > 0
+          ? Math.min(length - 1, max + value)
+          : Math.max(0, min - value),
+        options
+      )
+    }
+    {...props}
+  >
+    {children}
+  </Carousel.Button>
+);
+
+type ProgressionProps = {
+  children: (progression: { sizes: number[][] } & Range) => ReactNode;
+};
+Carousel.Progression = ({ children }: ProgressionProps) => {
+  const { scroll, range } = useContext(Context);
+  const min = useObserverState(range, "min");
+  const max = useObserverState(range, "max");
+  const length = useObserverState(range, "length");
+  const isScrolling = useObserverState(scroll, "scroll");
+
+  const [sizes, setSizes] = useState<number[][]>([]);
+
+  useEffect(() => {
+    if (!isScrolling && max && length) {
+      const size = max - min + 1;
+      const result = Array.from(
+        { length: Math.ceil(length / size) },
+        (_, index) =>
+          Array.from(
+            {
+              length:
+                index === Math.floor(length / size) ? length % size : size,
+            },
+            (_, subIndex) => index * size + subIndex
+          )
+      );
+      setSizes(result);
+    }
+  }, [isScrolling, min, max, length]);
+
+  return children({ sizes, min, max, length });
+};

@@ -24,7 +24,7 @@ export function useObserver<TObj extends Record<PropertyKey, any>>(
           return Reflect.get(target, p, receiver);
         },
         set(target, p, newValue, receiver) {
-          if (listeners.current.has(p)) {
+          if (listeners.current.has(p) && target[p] !== newValue) {
             listeners.current.get(p).forEach((cb) => cb(newValue));
           }
           return Reflect.set(target, p, newValue, receiver);
