@@ -100,6 +100,11 @@ class ZormUtil {
               );
             } else {
               setError((error) => {
+                const input = ref.current!.querySelector(
+                  `[name="${path}"]`
+                ) as HTMLInputElement | null;
+                if (input) input.reportValidity();
+
                 const ep = pathArray(path);
                 validate.error.errors.forEach((error) => {
                   error.path = ep;

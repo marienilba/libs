@@ -1,7 +1,11 @@
 "use client";
 
-import { useInstersectionObserver } from "@/libs/hooks/inView";
-import { Observer, useObserver, useObserverState } from "@/libs/hooks/observer";
+import { useInstersectionObserver } from "@/libs/hooks/useInView";
+import {
+  Observer,
+  useObserver,
+  useObserverState,
+} from "@/libs/hooks/useObserver";
 import {
   Children,
   ComponentProps,
