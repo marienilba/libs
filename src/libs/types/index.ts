@@ -15,15 +15,18 @@ type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
 ) => void
   ? I
   : never;
+
 type IsUnion<T> = [T] extends [UnionToIntersection<T>] ? false : true;
-type IntersectionOf<A extends any[]> = UnionToIntersection<A[number]>;
+export type IntersectionOf<A extends readonly any[]> = UnionToIntersection<
+  A[number]
+>;
 
 export type SingleObject<TObj extends { [x: PropertyKey]: PropertyKey }> =
   IsUnion<keyof TObj> extends true ? never : TObj;
 
 type CheckForNever<T extends any[]> = T extends [never, ...infer U]
   ? never
-  : T extends [infer H, ...infer R]
+  : T extends [infer _, ...infer R]
   ? CheckForNever<R>
   : T;
 
@@ -47,6 +50,9 @@ export type Prettify<T> = {
 export type DeepWriteable<T> = {
   -readonly [P in keyof T]: DeepWriteable<T[P]>;
 };
+export type Writeable<T> = {
+  -readonly [K in keyof T]: T[K];
+};
 
 type ArrayLengthMutationKeys =
   | "splice"
@@ -58,7 +64,47 @@ type ArrayLengthMutationKeys =
 type ArrayItems<T extends Array<any>> = T extends Array<infer TItems>
   ? TItems
   : never;
-type FixedLengthArray<T extends any[]> = Pick<
+export type FixedLengthArray<T extends any[]> = Pick<
   T,
   Exclude<keyof T, ArrayLengthMutationKeys>
 > & { [Symbol.iterator]: () => IterableIterator<ArrayItems<T>> };
+
+export type JSON = {
+  [x: string]: string | JSON;
+};
+
+export type ConvertToType<T, U = any> = {
+  readonly [K in keyof T]: T[K] extends object ? ConvertToType<T[K], U> : U;
+};
+
+export type ConvertedToTypeArray<T extends readonly any[], U = any> = {
+  [K in keyof T]: ConvertToType<T[K], U>;
+};
+
+export type TypeEqualityGuard<A, B> = Exclude<A, B> | Exclude<B, A>;
+// Helper type to check if two types are equal
+type IsEqual<A, B> = TypeEqualityGuard<A, B> extends never ? true : false;
+
+// Helper type to check if all elements in an array have the same type
+type AllEqual<T extends readonly any[]> = T extends [infer First, ...infer Rest]
+  ? Rest extends []
+    ? true
+    : IsEqual<First, Rest[0]> extends true
+    ? AllEqual<Rest>
+    : false
+  : true;
+
+export type Equals<T extends readonly any[]> = AllEqual<
+  DeepWriteable<T>
+> extends true
+  ? T
+  : never;
+
+export type MergeObject<T extends readonly object[]> = {
+  [K in keyof T[0]]: UnionFromKey<T, K>;
+};
+
+type UnionFromKey<
+  T extends readonly object[],
+  K extends keyof T[0]
+> = T[number][K];
