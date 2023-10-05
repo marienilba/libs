@@ -1,11 +1,12 @@
 "use client";
 
 import {
-  ConvertedToTypeArray,
-  Equals,
+  Convert,
+  DeepWriteable,
+  EqualsArray,
   JSON,
-  MergeObject,
-  Prettify,
+  Union,
+  UnionToIntersection,
 } from "@/libs/types";
 
 type PathsToProps<
@@ -35,21 +36,22 @@ type Join<T extends string[], D extends string> = T extends []
     : never
   : string;
 
-export default function Translate<TLocales extends readonly JSON[]>(
-  locales: TLocales extends Equals<ConvertedToTypeArray<TLocales, string>>
-    ? TLocales
-    : "LOCALES ARE NOT EQUALS" & never
+export default function Translate<TLocales extends { [lang: string]: JSON }>(
+  locales: TLocales
 ) {
-  return Object.assign(
-    locales.reduce((prev, curr) => Object.assign(prev, curr), {}),
-    {
-      t: <
-        T extends Join<PathsToStringProps<Prettify<MergeObject<TLocales>>>, ".">
-      >(
-        t: T
-      ): PathsToProps<Prettify<MergeObject<TLocales>>, T> => {
-        return null as any;
-      },
-    }
-  );
+  const currentLocale = "fr";
+  const translations =
+    Object.entries(locales).find(([k]) => k === currentLocale) ??
+    locales[Object.keys(locales)[0]] ??
+    {};
+
+  return Object.assign(translations ?? {}, {
+    t: <T extends string & Join<PathsToStringProps<Union<TLocales>>, ".">>(
+      key: T
+    ): PathsToProps<Union<TLocales>, T> => {
+      return key.split(".").reduce((o: any, k: any) => {
+        return o[k];
+      }, translations);
+    },
+  });
 }

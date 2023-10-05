@@ -10,9 +10,9 @@ export type Apart<
       [K in keyof U]: U[K];
     } & { [K in keyof T]?: never });
 
-type UnionToIntersection<U> = (U extends any ? (k: U) => void : never) extends (
-  k: infer I
-) => void
+export type UnionToIntersection<U> = (
+  U extends any ? (k: U) => void : never
+) extends (k: infer I) => void
   ? I
   : never;
 
@@ -73,30 +73,26 @@ export type JSON = {
   [x: string]: string | JSON;
 };
 
-export type ConvertToType<T, U = any> = {
-  readonly [K in keyof T]: T[K] extends object ? ConvertToType<T[K], U> : U;
+export type Convert<T, U = any> = {
+  [K in keyof T]: T[K] extends object ? Convert<T[K], U> : U;
 };
 
-export type ConvertedToTypeArray<T extends readonly any[], U = any> = {
-  [K in keyof T]: ConvertToType<T[K], U>;
+export type ConvertArray<T extends any[], U = any> = {
+  [K in keyof T]: Convert<T[K], U>;
 };
 
 export type TypeEqualityGuard<A, B> = Exclude<A, B> | Exclude<B, A>;
-// Helper type to check if two types are equal
 type IsEqual<A, B> = TypeEqualityGuard<A, B> extends never ? true : false;
 
-// Helper type to check if all elements in an array have the same type
-type AllEqual<T extends readonly any[]> = T extends [infer First, ...infer Rest]
+type AllEqualArray<T extends any[]> = T extends [infer First, ...infer Rest]
   ? Rest extends []
     ? true
     : IsEqual<First, Rest[0]> extends true
-    ? AllEqual<Rest>
+    ? AllEqualArray<Rest>
     : false
   : true;
 
-export type Equals<T extends readonly any[]> = AllEqual<
-  DeepWriteable<T>
-> extends true
+export type EqualsArray<T extends any[]> = AllEqualArray<T> extends true
   ? T
   : never;
 
@@ -108,3 +104,24 @@ type UnionFromKey<
   T extends readonly object[],
   K extends keyof T[0]
 > = T[number][K];
+
+export type Union<T> = {
+  [K in keyof T]: T[K];
+}[keyof T];
+
+type PickType<T, K extends AllKeys<T>> = T extends { [k in K]?: any }
+  ? T[K]
+  : undefined;
+type CommonKeys<T extends object> = keyof T;
+type AllKeys<T> = T extends any ? keyof T : never;
+type Subtract<A, C> = A extends C ? never : A;
+type NonCommonKeys<T extends object> = Subtract<AllKeys<T>, CommonKeys<T>>;
+type PickTypeOf<T, K extends string | number | symbol> = K extends AllKeys<T>
+  ? PickType<T, K>
+  : never;
+export type Merge<T extends object> = {
+  [k in CommonKeys<T>]: PickTypeOf<T, k>;
+} & {
+  [k in NonCommonKeys<T>]?: PickTypeOf<T, k>;
+};
+export type Equals<T> = T extends infer U ? (U extends T ? U : never) : never;
