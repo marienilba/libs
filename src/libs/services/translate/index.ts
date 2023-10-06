@@ -62,6 +62,16 @@ type FunctionArgs<
   ? [T]
   : [T, PathArgs<PathsToProps<Union<L>, T>>];
 
+function replace<T extends string>(
+  inputString: T,
+  replacementObject: { [key: string]: string }
+): T {
+  return inputString.replace(
+    /{{\s*([^}\s]+)\s*}}/g,
+    (match, key) => replacementObject[key.trim()] || match
+  ) as T;
+}
+
 export default function Translate<TLocales extends { [lang: string]: JSON }>(
   locales: TLocales
 ) {
@@ -74,14 +84,17 @@ export default function Translate<TLocales extends { [lang: string]: JSON }>(
   function t<T extends string & Join<PathsToStringProps<Union<TLocales>>, ".">>(
     ...args: FunctionArgs<TLocales, T>
   ): PathWithoutArgs<PathsToProps<Union<TLocales>, T>> {
-    const [key, params] = Array.from(args) as [
+    const [key, params = {}] = Array.from(args) as [
       T,
       PathArgs<PathsToProps<Union<TLocales>, T>>
     ];
 
-    return key.split(".").reduce((o: any, k: any) => {
-      return o[k];
-    }, translations);
+    return replace(
+      key.split(".").reduce((o: any, k: any) => {
+        return o[k];
+      }, translations),
+      params
+    );
   }
 
   return Object.assign(translations ?? {}, {
