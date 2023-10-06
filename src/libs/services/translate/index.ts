@@ -1,13 +1,32 @@
 "use client";
 
-import {
-  Convert,
-  DeepWriteable,
-  EqualsArray,
-  JSON,
-  Union,
-  UnionToIntersection,
-} from "@/libs/types";
+import { JSON, Trim, Union } from "@/libs/types";
+
+type PathArgs<T, O = {}> = T extends `${string}{{${infer V}}}${string}`
+  ? T extends `${string}{{${string}}}${infer R}`
+    ? PathArgs<
+        R,
+        {
+          [K in Trim<V>]: string;
+        } & O
+      >
+    : {
+        [K in Trim<V>]: string;
+      } & O
+  : keyof O extends never
+  ? never
+  : O;
+
+type IsEmpty<T extends string> = T extends "" ? true : false;
+
+type PathWithoutArgs<
+  T,
+  U extends string = ""
+> = T extends `${infer A}{{${infer B}}}${infer R}`
+  ? IsEmpty<Trim<R>> extends false
+    ? PathWithoutArgs<`${U}${A}${string}${R}`>
+    : `${U}${A}${string}`
+  : T;
 
 type PathsToProps<
   O extends { [x: string]: any },
@@ -36,6 +55,13 @@ type Join<T extends string[], D extends string> = T extends []
     : never
   : string;
 
+type FunctionArgs<
+  L extends { [lang: string]: JSON },
+  T extends string & Join<PathsToStringProps<Union<L>>, ".">
+> = PathArgs<PathsToProps<Union<L>, T>> extends never
+  ? [T]
+  : [T, PathArgs<PathsToProps<Union<L>, T>>];
+
 export default function Translate<TLocales extends { [lang: string]: JSON }>(
   locales: TLocales
 ) {
@@ -45,13 +71,20 @@ export default function Translate<TLocales extends { [lang: string]: JSON }>(
     locales[Object.keys(locales)[0]] ??
     {};
 
+  function t<T extends string & Join<PathsToStringProps<Union<TLocales>>, ".">>(
+    ...args: FunctionArgs<TLocales, T>
+  ): PathWithoutArgs<PathsToProps<Union<TLocales>, T>> {
+    const [key, params] = Array.from(args) as [
+      T,
+      PathArgs<PathsToProps<Union<TLocales>, T>>
+    ];
+
+    return key.split(".").reduce((o: any, k: any) => {
+      return o[k];
+    }, translations);
+  }
+
   return Object.assign(translations ?? {}, {
-    t: <T extends string & Join<PathsToStringProps<Union<TLocales>>, ".">>(
-      key: T
-    ): PathsToProps<Union<TLocales>, T> => {
-      return key.split(".").reduce((o: any, k: any) => {
-        return o[k];
-      }, translations);
-    },
+    t,
   });
 }

@@ -4,4 +4,4 @@ import en from "./en";
 
 export const { t } = Translate({ fr: fr, en: en });
 
-const x = t("home");
+const x = t("home", { count: "0" });

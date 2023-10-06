@@ -125,3 +125,14 @@ export type Merge<T extends object> = {
   [k in NonCommonKeys<T>]?: PickTypeOf<T, k>;
 };
 export type Equals<T> = T extends infer U ? (U extends T ? U : never) : never;
+
+export type Trim<
+  T extends string,
+  Acc extends string = ""
+> = T extends `${infer Char}${infer Rest}`
+  ? Char extends " "
+    ? Trim<Rest, Acc>
+    : Trim<Rest, `${Acc}${Char}`>
+  : T extends ""
+  ? Acc
+  : never;

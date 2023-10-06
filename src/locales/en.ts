@@ -1,5 +1,5 @@
 export default {
-  home: "Home",
+  home: "Home {{ count }}",
   test: {
     message: "message",
   },

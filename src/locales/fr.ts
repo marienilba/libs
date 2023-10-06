@@ -1,5 +1,5 @@
 export default {
-  home: "Accueil",
+  home: "Accueil {{ count }}",
   test: {
     message: "je suis france xd",
   },
