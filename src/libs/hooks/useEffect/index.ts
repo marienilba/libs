@@ -1,4 +1,4 @@
-import { DependencyList, EffectCallback, useEffect } from "react";
+import { DependencyList, EffectCallback, useEffect, useState } from "react";
 
 type ExtractDestructor<T extends EffectCallback> = T extends EffectCallback
   ? Exclude<ReturnType<T>, void>
@@ -20,4 +20,17 @@ export function useAsyncEffect(
       returned instanceof Function && returned();
     };
   }, deps);
+}
+
+export function useEffectValue<TEffect extends (...args: any) => any>(
+  effect: TEffect,
+  deps: DependencyList = [],
+  initialValue: ReturnType<TEffect>
+): ReturnType<TEffect> {
+  const [state, setState] = useState<ReturnType<TEffect>>(initialValue);
+
+  useEffect(() => {
+    setState(effect());
+  }, deps);
+  return state;
 }
